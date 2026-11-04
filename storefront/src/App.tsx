@@ -19,31 +19,13 @@ const DOTS = ['#C5D3E8', '#E8CBB8', '#C8DCC1', '#D9C6E4']
 const INK = '#16161A'
 const MUTED = '#66666C'
 
-// Looks for the shop slug in 3 places:
-// 1. ?shop=slug in the URL (web_app buttons / menu button)
-// 2. Telegram start_param (t.me/Bot/App?startapp=slug)
-// 3. tgWebAppStartParam in the URL hash (fallback for the same direct link)
 function shopSlug(): string | null {
-  const fromQuery = new URLSearchParams(location.search).get('shop')
-  const fromStart = tg?.initDataUnsafe?.start_param
-  const fromHash = new URLSearchParams(location.hash.slice(1)).get('tgWebAppStartParam')
-  return fromQuery || fromStart || fromHash || null
+  return new URLSearchParams(location.search).get('shop') ?? tg?.initDataUnsafe?.start_param ?? null
 }
 
-function Message({ title, text, inline }: { title: string; text?: string; inline?: boolean }) {
+function Message({ title, text }: { title: string; text?: string }) {
   return (
-    <div
-      style={{
-        minHeight: inline ? undefined : '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: inline ? '40px 20px' : 40,
-        textAlign: 'center',
-        color: INK,
-      }}
-    >
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 40, textAlign: 'center' }}>
       <div style={{ fontSize: 22, fontWeight: 700 }}>{title}</div>
       {text && <div style={{ color: MUTED, marginTop: 8, lineHeight: 1.5 }}>{text}</div>}
     </div>
@@ -55,44 +37,22 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    let cancelled = false
-
     tg?.ready()
     tg?.expand()
-
     const shop = shopSlug()
-    if (!tg?.initData) {
-      setError('Open this shop from Telegram.')
-      return
-    }
-    if (!shop) {
-      setError('This link has no shop in it. Ask the seller for the shop link.')
-      return
-    }
-
+    if (!tg?.initData) return setError('Open this shop from Telegram.')
+    if (!shop) return setError('This link has no shop in it.')
     fetch('/api/shop', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ shop, initData: tg.initData }),
     })
       .then(async (r) => {
-        // Server may return non-JSON (e.g. an HTML 404/500 page), so don't assume JSON
-        const body = await r.json().catch(() => null)
-        if (!r.ok) throw new Error(body?.error ?? `Something went wrong (${r.status})`)
-        if (!body) throw new Error('The shop sent an unreadable response.')
-        return body as Data
+        if (!r.ok) throw new Error((await r.json()).error ?? 'Something went wrong')
+        return r.json()
       })
-      .then((d) => {
-        if (!cancelled) setData(d)
-      })
-      .catch((e) => {
-        if (!cancelled) setError(e.message)
-      })
-
-    // StrictMode runs effects twice in dev; this stops the first run from updating state
-    return () => {
-      cancelled = true
-    }
+      .then(setData)
+      .catch((e) => setError(e.message))
   }, [])
 
   if (error) return <Message title="Could not open the shop" text={error} />
@@ -104,7 +64,7 @@ export default function App() {
   const price = (n: number) => `${shop.currency} ${Number(n).toLocaleString('en-US')}`
 
   return (
-    <div style={{ maxWidth: 480, margin: '0 auto', paddingBottom: 32, color: INK }}>
+    <div style={{ maxWidth: 480, margin: '0 auto', paddingBottom: 32 }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 20px' }}>
         {shop.logo_url ? (
           <img src={shop.logo_url} alt="" width={40} height={40} style={{ borderRadius: 20, objectFit: 'cover' }} />
@@ -121,7 +81,7 @@ export default function App() {
       {shop.description && <p style={{ margin: '0 20px 16px', color: MUTED, lineHeight: 1.5 }}>{shop.description}</p>}
 
       {products.length === 0 ? (
-        <Message inline title="No products yet" text="Check back soon." />
+        <Message title="No products yet" text="Check back soon." />
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: '0 20px' }}>
           {products.map((p, i) => {
