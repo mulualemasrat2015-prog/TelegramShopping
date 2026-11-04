@@ -34,7 +34,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     .select('id,name,description,logo_url,status,currency,verified,shop_bots(token),shop_themes(primary_color)')
     .eq('slug', slug)
     .maybeSingle()
-   if (error) return res.status(500).json({ error: `Database error: ${error.message}` }) const row: any = data
+  const row: any = data
   const token = one(row?.shop_bots)?.token
   if (!row || !token) return res.status(404).json({ error: 'Shop not found' })
 
